@@ -734,5 +734,10 @@ transition_index(log2data_00h)
 
 
 
-
-
+'predict 预测新值'
+将要用于预测的数据保存到数据框中。用predict函数，将newdata参数设为这个数据框：
+> m <- lm(y ~ u + v + w) > preds <- data.frame(u=3.1, v=4.0, w=5.5) > predict(m, newdata=preds) 讨论
+有了线性模型，就可以很方便地做预测，predict函数会搞定所有的麻烦。唯一的麻烦就是要把你的数据整到数据框中去。 predict函数会返回一个预测值的向量，数据中每一行都会有一个相应的预测值。 解决方案中的例子只有一行，所以只有一个返回值：
+> preds <- data.frame(u=3.1, v=4.0, w=5.5) > predict(m, newdata=preds) 1 12.31374
+如果预测数据有多行，就会为没一行数据返回一个预测值：
+> preds <- data.frame( + u=c(3.0, 3.1, 3.2, 3.3), + v=c(3.9, 4.0, 4.1, 4.2), + w=c(5.3, 5.5, 5.7, 5.9) ) > predict(m, newdata=preds) 1 2 3 4 11.97277 12.31374 12.65472 12.99569
