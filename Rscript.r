@@ -741,3 +741,11 @@ transition_index(log2data_00h)
 > preds <- data.frame(u=3.1, v=4.0, w=5.5) > predict(m, newdata=preds) 1 12.31374
 如果预测数据有多行，就会为没一行数据返回一个预测值：
 > preds <- data.frame( + u=c(3.0, 3.1, 3.2, 3.3), + v=c(3.9, 4.0, 4.1, 4.2), + w=c(5.3, 5.5, 5.7, 5.9) ) > predict(m, newdata=preds) 1 2 3 4 11.97277 12.31374 12.65472 12.99569
+
+'apply 多个参数处理方法就是在后面补充相应的变量值'			
+https://stackoverflow.com/questions/6827299/r-apply-function-with-multiple-parameters			
+			
+			
+			
+			
+			
