@@ -747,5 +747,44 @@ https://stackoverflow.com/questions/6827299/r-apply-function-with-multiple-param
 			
 			
 			
+
 			
+			
+'求所有的差异基因，同时可以卡pvalue和foldchange'			
+Tet2_ko_1 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/Tet2_ko_1.gene.count',header=F)
+Tet2_ko_2 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/Tet2_ko_2.gene.count',header=F)
+WT_1 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/WT_1.gene.count',header=F)
+WT_2 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/WT_2.gene.count',header=F)
+Tet2_countdata <- cbind(WT_1[,2],WT_2[,2],Tet2_ko_1[,2],Tet2_ko_2[,2])
+
+index <- !(duplicated(as.character(WT_1[,1])))
+Tet2_countdata <- Tet2_countdata[index,]
+colnames(Tet2_countdata) <- c('WT_1','WT_2','Tet2_ko_1','Tet2_ko_2')
+rownames(Tet2_countdata) <- WT_1[index,1]
+delete_index <-rownames(Tet2_countdata)=='__no_feature' | rownames(Tet2_countdata)=='__ambiguous' | rownames(Tet2_countdata)=='__alignment_not_unique' | rownames(Tet2_countdata)=='__not_aligned' | rownames(Tet2_countdata)=='__too_low_aQual'
+Tet2_countdata <- Tet2_countdata[!delete_index,]
+
+
+edger.fun <- function(data,state,rep_num,label,logfc=1.5,pvalue=0.05){
+	require(edgeR)
+	y <- DGEList(counts = data,group = rep(state,rep_num),genes = rownames(data))
+	keep <- rowSums(cpm(y)>15) >= 2 #sum(keep) filter low expressed genes
+	y <- y[keep, , keep.lib.sizes=FALSE]
+	y <-calcNormFactors(y) #delete effective library size.
+	pdf(paste(label,".pdf",sep=""),width=12,height=4)
+	par(mfrow=c(1,3))
+	plotMDS(y)
+	y <- estimateCommonDisp(y)
+	y <- estimateTagwiseDisp(y)
+	plotBCV(y)
+	et<-exactTest(y, dispersion = "auto")
+	write.table(topTags(et,n=40000),file=paste('all',label,".txt",sep="_"),sep="\t",quote=F,row.names=F,col.names=T)
+#	write.table(et$table[et$table$PValue < pvalue & et$table$logFC < (-logfc),],file=paste(state[2],'high',state[1],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
+#	write.table(et$table[et$table$PValue < pvalue & et$table$logFC > (logfc),],file=paste(state[1],'high',state[2],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
+	de<-decideTestsDGE(et)
+	detags<-rownames(y)[as.logical(de)]
+	plotSmear(et,de.tags=detags,cex=0.5)
+	abline(h=c(-logfc,logfc),col="blue")
+	dev.off()
+}
 			
