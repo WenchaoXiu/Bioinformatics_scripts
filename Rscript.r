@@ -750,7 +750,11 @@ https://stackoverflow.com/questions/6827299/r-apply-function-with-multiple-param
 
 			
 			
-'求所有的差异基因，同时可以卡pvalue和foldchange'			
+'求所有的差异基因，同时可以卡pvalue和foldchange,并把refseq转化成gene symbol'			
+###########
+###########  edgeR
+###########
+
 Tet2_ko_1 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/Tet2_ko_1.gene.count',header=F)
 Tet2_ko_2 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/Tet2_ko_2.gene.count',header=F)
 WT_1 <- read.table('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)/count/WT_1.gene.count',header=F)
@@ -778,13 +782,61 @@ edger.fun <- function(data,state,rep_num,label,logfc=1.5,pvalue=0.05){
 	y <- estimateTagwiseDisp(y)
 	plotBCV(y)
 	et<-exactTest(y, dispersion = "auto")
-	write.table(topTags(et,n=40000),file=paste('all',label,".txt",sep="_"),sep="\t",quote=F,row.names=F,col.names=T)
-#	write.table(et$table[et$table$PValue < pvalue & et$table$logFC < (-logfc),],file=paste(state[2],'high',state[1],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
-#	write.table(et$table[et$table$PValue < pvalue & et$table$logFC > (logfc),],file=paste(state[1],'high',state[2],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
+	all <- as.data.frame(topTags(et,n=40000))
+	down <- et$table[et$table$PValue < pvalue & et$table$logFC < (-logfc),]
+	up <- et$table[et$table$PValue < pvalue & et$table$logFC > (logfc),]
+	all[,'logFC'] <- -all[,'logFC']
+	down[,'logFC'] <- -down[,'logFC']
+	up[,'logFC'] <- -up[,'logFC']
+	write.table(all,file=paste('all',label,".txt",sep="_"),sep="\t",quote=F,row.names=F,col.names=T)
+	write.table(down,file=paste(state[2],'high',state[1],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
+	write.table(up,file=paste(state[1],'high',state[2],'low',".txt",sep="_"),sep="\t",quote=F,row.names=T,col.names=T)
 	de<-decideTestsDGE(et)
 	detags<-rownames(y)[as.logical(de)]
 	plotSmear(et,de.tags=detags,cex=0.5)
 	abline(h=c(-logfc,logfc),col="blue")
 	dev.off()
 }
+
+setwd('~/Desktop/lab_work/2.Tet12_hmc_mc/2017.11.5(results)')
+edger.fun(Tet2_countdata,c('WT','Tet2_ko'),c(2,2),'WT_Tet2_ko',logfc=1)
+
+
+
+##########
+########## convert refseq to genesymbol
+##########
+def refseq2genesymbol(ref,infile,outfile):
+	fout = open(outfile,'w')
+	refseq = []
+	genesymbol = []
+	for i in open(ref,'r').xreadlines():
+		linei = i.strip().split('\t')
+		refseq.append(linei[0])
+		genesymbol.append(linei[1])
+	for i in open(infile,'r').xreadlines():
+		if i.startswith('gene') or i.startswith('log'):
+			print >>fout, i.strip()
+			continue
+		else:
+			linei = i.strip().split('\t')
+			for j in range(len(refseq)):
+				if linei[0].upper() == refseq[j].upper():
+					print >>fout, '\t'.join([genesymbol[j]]+linei[1:])
+	fout.close()
+
+
+				
+refseq2genesymbol('./refseq_genesymbol.txt','./all_WT_Tet2_ko_.txt','./WT_Tet2_ko.txt')
+refseq2genesymbol('./refseq_genesymbol.txt','./Tet2_ko_high_WT_low_.txt','./Tet2_ko_up.txt')
+refseq2genesymbol('./refseq_genesymbol.txt','./WT_high_Tet2_ko_low_.txt','./Tet2_ko_down.txt')
+
+
+			
+			
+			
+			
+			
+			
+			
 			
