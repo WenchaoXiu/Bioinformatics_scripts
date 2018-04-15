@@ -836,6 +836,24 @@ refseq2genesymbol('./refseq_genesymbol.txt','./WT_high_Tet2_ko_low_.txt','./Tet2
 			
 			
 			
+##########
+########## tsne
+##########
+library(Rtsne)
+unique_data <- unique(data)
+unique_data <- as.matrix(unique_data)
+tsne <- Rtsne(unique_data, dims = 2, perplexity=30, verbose=TRUE, max_iter = 500)
+
+label <- c()
+for (i in 1:7){
+	label <- c(label,rep(c('d0','d1','d3','d6','d9','d12','F10')[i],ncol(data_list[[i]])))
+}
+colors <- rainbow(7)
+names(colors) = c('d0','d1','d3','d6','d9','d12','F10')
+
+# plot(tsne$Y, t='n', main="tsne")
+plot(tsne$Y,  main="tsne",col=colors[label])
+text(tsne$Y, labels=label, col=colors[label])
 			
 			
 			
