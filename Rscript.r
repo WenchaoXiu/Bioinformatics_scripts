@@ -873,6 +873,337 @@ exeTimeTsne<‐ system.time(Rtsne(train[,‐1], dims = 2, perplexity=30, verbose
 plot(tsne$Y, t='n', main="tsne")
 text(tsne$Y, labels=train$label, col=colors[train$label])
 
+			
+			
+			
+			
+		
+##########
+########## barplot up/down genes with ggplot2
+##########			
+			
+down <- c(nrow(d1_d0_d0_high),nrow(d3_d1_d1_high),nrow(d6naive_d3_d3_high),nrow(d9naive_d6naive_d6naive_high),
+	nrow(d12_d9naive_d9naive_high),nrow(F10_d12_d12_high),nrow(d9prime_d6prime_d6prime_high),
+	nrow(d6prime_d6naive_d6naive_high),
+	nrow(d9prime_d9naive_d9naive_high),nrow(d9prime_d6naive_d6naive_high),nrow(d6prime_d3_d3_high))
+up <- c(nrow(d1_d0_d1_high),nrow(d3_d1_d3_high),nrow(d6naive_d3_d6naive_high),nrow(d9naive_d6naive_d9naive_high),
+	nrow(d12_d9naive_d12_high),nrow(F10_d12_F10_high),nrow(d9prime_d6prime_d9prime_high),
+	nrow(d6prime_d6naive_d6prime_high),
+	nrow(d9prime_d9naive_d9prime_high),nrow(d9prime_d6naive_d9prime_high),nrow(d6prime_d3_d6prime_high))
+sample_names <- c('d1/d0','d3/d1','d6naive/d3','d9naive/d6naive','d12_d9naive','F10/d12',
+	'd9primed/6prime','d6prime/d6naive','d9prime/d9naive','d9prime/d6naive','d6prime/d3')
+
+
+library(ggplot2)
+df <- data.frame(group = rep(c("up", "down"), each=length(down)), name = rep(sample_names, 2), value = c(up,-down))
+df$name <- factor(rep(sample_names, 2), levels = sample_names)
+p <- ggplot(df, aes(x=name, y=value)) + 
+	    geom_bar(aes(fill = group),stat="identity",position="identity")+
+	    theme(axis.text.x = element_text(size=8, angle=45))+
+	    geom_text(data=df, aes(rep(seq(length(down)), 2), value, group=group, 
+	    	label=abs(value)), position = position_dodge(width=0),size=4)+
+	    ggtitle('different expressed gene')+
+	    theme(plot.title = element_text(hjust = 0.5))
+print(p) 
+	
+			
+##########
+########## 在PCA中给基因染色，根据表达值
+##########			
+			
+			
+# '根据表达值*10得到对应表达值颜色，表达值越高，颜色越深'
+get_color <- function(value,color){
+	color <- colorRampPalette(c('white',color))(max(value*10)+1)
+	return(color[value*10+1])
+}
+# '根据data绘制PCA（filter掉95%cell不表达基因）对相应基因根据表达值染色'
+expression_leve_plot <- function(data,gene,color){
+	filter_index <- !(apply(data<1,1,sum) >= ncol(data)*0.95)
+	data <- data[filter_index,]
+	pca <- prcomp(log(t(as.matrix(data))+1,2))
+	x <- pca$x[,1]
+	y <- pca$x[,2]
+	pdf(paste(gene,'_expression_in_pca.pdf',sep=''))
+	gene_color <- get_color(as.numeric(log(data[gene,]+1,2)),color)
+	plot(x,y,pch='',xlab=paste('PC1','(',summary(pca)[[6]]['Proportion of Variance',1]*100,'%)',sep='')
+		,ylab=paste('PC2','(',summary(pca)[[6]]['Proportion of Variance',2]*100,'%)',sep=''))
+	points(x,y,pch=21,bg=gene_color)
+	dev.off()
+}
+for (prime in c('B3GAT1','CD24','THY1')){
+	expression_leve_plot(sc_fpkm,prime,'red')
+}
+
 
 			
+##########
+########## kmeans by correlation
+##########			
 			
+			
+library(amap)
+load('~/Desktop/Projects/naiveES/data_table/data_list.Rdata')
+data_d6 <- data_list[[4]]
+index_d6 <- !(apply(data_d6<1,1,sum) >= ncol(data_d6)*0.95)
+data_d6 <- data_d6[index_d6,]
+set.seed(0928)
+kmeans_data_d6 <- Kmeans(t(data_d6),2,iter.max=500,method = "correlation")$cluster
+			
+			
+			
+			
+			
+			
+###############################################
+#############     8.GSEA通路分析     ###########
+###############################################
+'进行GSEA通路分析'
+library('GSA')
+library('fgsea')
+library('ggplot2')
+
+gsea_enrichment <- function(gmtfile_path,FC){
+	pathway <- GSA.read.gmt(gmtfile_path)
+	pathway_process <- pathway$genesets
+	names(pathway_process) <- pathway$geneset.names
+
+	FC_prime <- FC[order(FC[,'logFC'],decreasing=T),]
+	FC_rank_prime <- as.numeric(as.character(FC_prime[,'logFC']))
+	names(FC_rank_prime) <- rownames(FC_prime)
+
+	FC_naive <- FC[order(FC[,'logFC']),]
+	FC_rank_naive <- as.numeric(as.character(FC_naive[,'logFC']))
+	names(FC_rank_naive) <- rownames(FC_naive)
+
+	fgseaRes_prime <- fgsea(pathways = pathway_process, 
+	                  stats = FC_rank_prime,
+	                  minSize=10,
+	                  maxSize=500,
+	                  nperm=10000)
+	fgseaRes_naive <- fgsea(pathways = pathway_process, 
+	                  stats = FC_rank_naive,
+	                  minSize=10,
+	                  maxSize=500,
+	                  nperm=10000)
+	'找到上下调最显著的那些pathway'
+	prime_enrich <- fgseaRes_prime[fgseaRes_prime[, pval<0.05] & fgseaRes_prime[, ES > 0],]
+	naive_enrich <- fgseaRes_naive[fgseaRes_naive[, pval<0.05] & fgseaRes_naive[, ES > 0],]
+	prime_enrich <- prime_enrich[order(pval),]
+	naive_enrich <- naive_enrich[order(pval),]
+	sapply(prime_enrich[['leadingEdge']],function(x) paste(x, collapse=","))
+
+	prime_enrich_term <- cbind(prime_enrich[['pathway']],prime_enrich[['NES']],prime_enrich[['pval']],
+		sapply(prime_enrich[['leadingEdge']],function(x) paste(x, collapse=",")))
+	naive_enrich_term <- cbind(naive_enrich[['pathway']],naive_enrich[['NES']],naive_enrich[['pval']],
+		sapply(naive_enrich[['leadingEdge']],function(x) paste(x, collapse=",")))
+	colnames(prime_enrich_term) <- c('pathway','NES','pval','leadingEdge')
+	colnames(naive_enrich_term) <- c('pathway','NES','pval','leadingEdge')
+	output <- list(prime_enrich_term,naive_enrich_term)
+	names(output) <- c('prime_enrich_term','naive_enrich_term')
+	return(output)
+}
+
+GO_term <- '/Users/xiu/Desktop/Projects/naiveES/naiveES_heterogenety/4.diff_express_gene/diff_gene_GSEA/GO_term.gmt'
+MIRT_TFT <- '/Users/xiu/Desktop/Projects/naiveES/naiveES_heterogenety/4.diff_express_gene/diff_gene_GSEA/MIRT_TFT.gmt'
+Pathway <- '/Users/xiu/Desktop/Projects/naiveES/naiveES_heterogenety/4.diff_express_gene/diff_gene_GSEA/Pathway.gmt'
+
+
+d6_GO_term_gsea <- gsea_enrichment(GO_term,diff_gene_d6_fdr005)
+d6_MIRT_TFT_gsea <- gsea_enrichment(MIRT_TFT,diff_gene_d6_fdr005)
+d6_Pathway_gsea <- gsea_enrichment(Pathway,diff_gene_d6_fdr005)
+		       
+		       
+	#####  画图	       
+plotEnrichment(pathway_process[["GO_CARDIAC_CHAMBER_DEVELOPMENT"]],
+               FC_rank) + labs(title="GO_CARDIAC_CHAMBER_DEVELOPMENT")
+               
+fgseaRes[pathway=='LEE_LIVER_CANCER', NES]
+fgseaRes[pathway=='LEE_LIVER_CANCER', pval]
+
+legend('topright',paste('p_value = ',fgseaRes[pathway=='LEE_LIVER_CANCER', pval],sep=''),bty='n')
+
+		       
+		       
+		       
+		  
+		       
+##########
+########## 通过对两状态下的fpkm进行t test确定是否是specific gene，给出表达中位数，表达中位数均值比值，以及在细胞中表达比例
+##########			
+		       
+		       
+# 3.'specific exp gene at differnet stage'
+specific_func <- function(sep_fpkm_data_list,state_a,state_b){
+	prime_like <- log(sep_fpkm_data_list[[state_a]]+1,2)
+	naive_like <- log(sep_fpkm_data_list[[state_b]]+1,2)
+	combine_data <- cbind(prime_like,naive_like)
+	index <- !(apply(combine_data<1,1,sum) >= ncol(combine_data)*0.95)
+	prime_like <- prime_like[index,]
+	naive_like <- naive_like[index,]
+	gene_exp_state <- c()
+	for (i in 1:nrow(naive_like)){
+		pvalue <- t.test(as.numeric(prime_like[i,]),as.numeric(naive_like[i,]))$p.value
+		prime_mid <- median(as.numeric(prime_like[i,]))
+		naive_mid <- median(as.numeric(naive_like[i,]))
+		prime_like_exp_ratio = round(sum(as.numeric(prime_like[i,])>1)*1.0/(ncol(prime_like))*100,2)
+		naive_like_exp_ratio = round(sum(as.numeric(naive_like[i,])>1)*1.0/(ncol(naive_like))*100,2)
+		prime_vs_naive_mid <- (prime_mid+0.1)/(naive_mid+0.1)
+		prime_vs_naive_mean <- (mean(as.numeric(prime_like[i,]))+0.1)/(mean(as.numeric(naive_like[i,]))+0.1)		
+		gene_exp_state <- rbind(gene_exp_state,c(prime_mid,naive_mid,prime_vs_naive_mid,prime_vs_naive_mean,pvalue,prime_like_exp_ratio,naive_like_exp_ratio))
+	}
+	colnames(gene_exp_state) <- c(paste(state_a,'_mid',sep=''),paste(state_b,'_mid',sep=''),
+		paste(state_a,'_vs_',state_b,'_mid',sep=''),paste(state_a,'_vs_',state_b,'_mean',sep=''),
+		'pvalue',paste(state_a,'_exp_ratio',sep=''),paste(state_b,'_exp_ratio',sep=''))
+	rownames(gene_exp_state) <- rownames(naive_like)
+	gene_exp_state_005 <- gene_exp_state[gene_exp_state[,5]<0.05,]
+	gene_exp_state_005 <- gene_exp_state_005[order(gene_exp_state_005[,5]),]
+	prime_specific <- gene_exp_state_005[gene_exp_state_005[,4]>1,]
+	naive_specific <- gene_exp_state_005[gene_exp_state_005[,4]<1,]
+	prime_naive_specific <- list(prime_specific,naive_specific)
+	names(prime_naive_specific) <- c(paste(state_a,'_specific',sep=''),paste(state_b,'_specific',sep=''))
+	return(prime_naive_specific)
+}
+# 'sc_d0','sc_d1','sc_d3','sc_d6_prime','sc_d6_naive','sc_d9_prime','sc_d9_naive','sc_d12','sc_F10','bc_all'
+
+# 4.'d6 prime like specific genes'
+sc_d0_d6_prime_specific <- specific_func(seprate_exp_fpkm,'sc_d0','sc_d6_prime')[['sc_d6_prime_specific']]
+		       
+		       
+		       
+		       
+##########
+########## boxplot
+##########
+		       
+boxplot_expression_9 <- function(gene_vector,pdf_name){
+	pdf(pdf_name)
+	par(mfrow=c(3,3))
+	pic_num <- 0
+	for (gene in gene_vector){
+		if(gene %in% rownames(seprate_exp_fpkm[[1]])){
+			par(cex.axis=0.8) 
+				boxplot(list(log(as.numeric(seprate_exp_fpkm[[1]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[2]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[3]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[4]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[5]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[6]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[7]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[8]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[9]][gene,])+1,2)),
+					names=names(seprate_exp_fpkm)[c(1,2,3,4,5,6,7,8,9)],las=2,main=gene,ylab='log2_FPKM',col=c('lightblue',
+						'lightblue','lightblue','pink','lightblue','pink','lightblue','lightblue','lightblue'),outline=F)
+				stripchart(list(log(as.numeric(seprate_exp_fpkm[[1]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[2]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[3]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[4]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[5]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[6]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[7]][gene,])+1,2),
+					log(as.numeric(seprate_exp_fpkm[[8]][gene,])+1,2),log(as.numeric(seprate_exp_fpkm[[9]][gene,])+1,2)),
+					vertical = TRUE, method = "jitter", add = TRUE, pch = 20, col = 'darkgreen')
+			pic_num <- pic_num+1
+			if(pic_num%%9 ==0){par(mfrow=c(3,3))}
+		}
+	}
+	dev.off()
+}
+
+for (i in 1:9){rownames(seprate_exp_fpkm[[i]]) <- toupper(rownames(seprate_exp_fpkm[[i]]))}
+
+'cell_cycle_gene'
+cell_cycle_path <- '~/Desktop/Projects/naiveES/naiveES_heterogenety/7.gene_cell_cycle_gene_boxplot/nbt.3102-S2.xlsx'
+cell_cycle_gene <- toupper(as.character(read.xlsx(cell_cycle_path, sheetName = "gene_symbol")[,2]))
+boxplot_expression_9(cell_cycle_gene,'cell_cycle_expression.pdf')
+		       
+		       
+		       
+		       
+		       
+		       
+##########
+########## 2*2列联表
+##########		      
+chi_test <- function(row,col,all){
+	data_table <- c(length(intersect(row,col)),
+	length(setdiff(col,row)),
+	length(setdiff(row,col)),
+	length(setdiff(all,union(row,col))))
+	dim(data_table)<- c(2,2)
+	print('table')
+	print(data_table)
+	print('p-value')
+	print(chisq.test(data_table,correct = F)$p.value)
+}
+		       
+		       
+##########
+########## 利用 entropy 表述 varience，以0.1为bin计算 
+##########			       
+entropy_fun <- function(x){
+	x <- as.numeric(x)
+	y <- discretize(x, numBins=floor(max(x)/0.1)+1,r=c(0,(floor(max(x)/0.1)+1)/10))
+	return(entropy(y))
+}
+
+chi_test(cell_cycle_gene,d6_diff_exp_gene,all_gene)
+
+		       
+		       
+		       
+		       
+##########
+########## 计算俩俩sample之间都不为0的gene的correlation，得到matrix
+##########		       
+		       
+cor_without_0 <- function(FPKM_matrix){
+	cor_vec <- c()
+	for (col_i in 1:ncol(FPKM_matrix)){
+		for (col_j in 1:ncol(FPKM_matrix)){
+			data1 <- log(FPKM_matrix[,col_i]+1,2)
+			data2 <- log(FPKM_matrix[,col_j]+1,2)
+			keep <- data1!=0 & data2!=0
+			correlation <- cor(log(FPKM_matrix[keep,col_i]+1,2), log(FPKM_matrix[keep,col_j]+1,2))
+			cor_vec <- c(cor_vec,correlation)
+		}
+	}
+	cor_matrix <- matrix(cor_vec,nrow=ncol(FPKM_matrix),byrow=T)
+	rownames(cor_matrix) <- colnames(FPKM_matrix)
+	colnames(cor_matrix) <- colnames(FPKM_matrix)
+	return(cor_matrix)
+}
+FPKM_cor_matrix <- cor_without_0(all_data_FPKM)
+		       
+		       
+		       
+		       
+##########
+########## 计算各个状态之间的correlation，给一个fpkm matrix给一个各个状态对应列数的vector
+##########		       
+stage_mean_cor <- function(FPKM_cor_matrix,stage_num){
+	mean_stage_cor_vec <- c()
+	for (i in 1:9){
+		for (j in 1:9){
+			mean_stage_cor <- mean(FPKM_cor_matrix[(sum(stage_num[1:i])+1):sum(stage_num[1:i+1]),(sum(stage_num[1:j])+1):sum(stage_num[1:j+1])])
+			mean_stage_cor_vec <- c(mean_stage_cor_vec,mean_stage_cor)
+		}
+	}
+	mean_stage_cor_matrix <- matrix(mean_stage_cor_vec,nrow=9,byrow=T)
+	colnames(mean_stage_cor_matrix) <- c('sc_d0','sc_d1','sc_d3','sc_d6_prime','sc_d6_naive',
+		'sc_d9_prime','sc_d9_naive','sc_d12','sc_F10')
+	rownames(mean_stage_cor_matrix) <- c('sc_d0','sc_d1','sc_d3','sc_d6_prime','sc_d6_naive',
+		'sc_d9_prime','sc_d9_naive','sc_d12','sc_F10')
+	return(mean_stage_cor_matrix)
+}
+#'mean log2 FPKM correlation'
+
+stage_num <- c(0,ncol(data_list[['sc_d0']]), ncol(data_list[['sc_d1']]),
+	ncol(data_list[['sc_d3']]),ncol(sc_d6_prime),ncol(sc_d6_naive),ncol(sc_d9_prime),ncol(sc_d9_naive),
+	ncol(data_list[['sc_d12']]),ncol(data_list[['sc_F10']]),ncol(data_list[['bc_all']]))
+names(stage_num) <- c('start','sc_d0', 'sc_d1', 'sc_d3', 'sc_d6_prime', 'sc_d6_naive','sc_d9_prime',
+	'sc_d9_naive', 'sc_d12','sc_F10','bulk_cell')
+stage_mean_cor_matrix <- stage_mean_cor(FPKM_cor_matrix,stage_num)
+		       
+		       
+		       
+##########
+########## heatmap绘制
+##########			       
+library(pheatmap) 
+pdf('cor_mean.pdf')
+pheatmap(stage_mean_cor_matrix,display_numbers = TRUE)
+dev.off()
+
+		       
