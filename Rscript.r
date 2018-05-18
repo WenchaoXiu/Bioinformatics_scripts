@@ -1206,4 +1206,37 @@ pdf('cor_mean.pdf')
 pheatmap(stage_mean_cor_matrix,display_numbers = TRUE)
 dev.off()
 
+
 		       
+		       
+		       
+		       
+		       
+		       
+		       
+		       
+		       
+bar_with_pvalue <- function(list1,list2,ylab_text,type_name,col){
+	n <- 2
+	xpos <- 0:(n-1)+1.5
+	p_value <- t.test(list1,list2)$p.value	
+	mark <- symnum(p_value, cutpoints=c(0,0.001,0.01,0.05,1), symbols=c("***","**","*","-"))
+	bp <- boxplot(list1,list2,at=0:(n-1)+1, xlim=c(0.5,n+0.5),outline=F,plot=F)
+	ylim <- range(bp$stats,na.rm=T)
+	dist <- (ylim[2]-ylim[1])/10
+	ylim[2] <- ylim[2]+4*dist
+	boxplot(list1,list2,at=0:(n-1)+1, xlim=c(0.5,n+0.5),ylim=ylim,col=col,outline=F,names=type_name,main="",lwd=2,ylab=ylab_text)
+	box(lwd=2)
+	ypos_1 <- bp$stats[5,][1:n-1]
+	ypos_2 <- bp$stats[5,][2:n]
+	legend("topleft",c("***:p<0.001","** :p<0.01","*  :p<0.05"),text.col='black',bty="n")
+	for(i in 1:length(mark)){
+		if(!is.na(mark[i])){
+			segments(xpos[i]-.4, ypos_1[i]+dist/2, xpos[i]-.4, max(ypos_1[i], ypos_2[i])+dist)
+			segments(xpos[i]+.4, ypos_2[i]+dist/2, xpos[i]+.4, max(ypos_1[i], ypos_2[i])+dist)
+			segments(xpos[i]-.4, max(ypos_1[i], ypos_2[i])+dist, xpos[i]-0.2, max(ypos_1[i], ypos_2[i])+dist)
+			segments(xpos[i]+.4, max(ypos_1[i], ypos_2[i])+dist, xpos[i]+0.2, max(ypos_1[i], ypos_2[i])+dist)
+			text(x=xpos[i], y=max(ypos_1[i], ypos_2[i])+dist, label=mark[i], col="black")
+		}
+	}
+}
