@@ -220,7 +220,8 @@ hcdup <- hclust(dist(tdata), "ave")
 pdf('hcluster-dup.pdf')
 plot(as.phylo(hcdup),type="unrooted",cex=0.5 )
 dev.off()
-
+参考：
+http://www.sthda.com/english/wiki/beautiful-dendrogram-visualizations-in-r-5-must-known-methods-unsupervised-machine-learning
 
 #######################################
 ############   7.绘制PCA图   ###########
